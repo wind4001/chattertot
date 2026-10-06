@@ -246,10 +246,12 @@ cascade/
   db/init.sql       Table definitions
   docker-compose.yml
   benchmark/        Measurement and regression scripts (see "Testing")
-  (models live in the Docker volume `cascade_asr_models`, not in the repo — see Quick start step 1)
 docs/               Design docs, research, ADRs
 server/             The abandoned first approach — see "History"
 ```
+
+<sub>Models are not a directory in the repo — they live in the Docker volume `cascade_asr_models`
+(see Quick start step 1). Test recordings live in `cascade/audio-test/`, which is gitignored.</sub>
 
 ---
 

@@ -229,10 +229,12 @@ cascade/
   db/init.sql       建表脚本
   docker-compose.yml
   benchmark/        实测与回归脚本（见「测试」）
-  （模型在 Docker 卷 `cascade_asr_models` 里，不在仓库目录内——见快速开始第 1 步）
 docs/               技术方案、调研、ADR
 server/             已放弃的第一版方案，见「历史」
 ```
+
+<sub>模型不是仓库里的目录——它们在 Docker 卷 `cascade_asr_models` 里（见快速开始第 1 步）。
+测试录音放在 `cascade/audio-test/`，该目录被 gitignore。</sub>
 
 ---
 
