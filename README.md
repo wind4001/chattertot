@@ -146,7 +146,7 @@ Two keys are required. **Both fail silently if missing** — no exception, no wa
 
 | Variable | Symptom when missing |
 |---|---|
-| `LLM_API_KEY` | Plays a fallback line ("Sorry, I didn't catch that — say it again?") |
+| `LLM_API_KEY` | Plays a fallback line — 「刚刚我没听清，你再说一遍好吗？」 ("Sorry, I didn't catch that — say it again?"). **The spoken output is Chinese**, including this fallback. |
 | `TTS_API_KEY` | Text appears but there is **no audio at all** |
 
 ### 5. Run the backend
@@ -246,7 +246,7 @@ cascade/
   db/init.sql       Table definitions
   docker-compose.yml
   benchmark/        Measurement and regression scripts (see "Testing")
-  models/           Local model cache (not in git — see Quick start step 1)
+  (models live in the Docker volume `cascade_asr_models`, not in the repo — see Quick start step 1)
 docs/               Design docs, research, ADRs
 server/             The abandoned first approach — see "History"
 ```
@@ -267,9 +267,15 @@ bash cascade/backend/run_test_server.sh
 cd cascade/benchmark && python test_regression.py
 ```
 
-> The other scripts under `benchmark/` (`test_kws*.py`, `bench_*.py`) are historical measurement
-> scripts. They expect audio files under `cascade/audio-test/`, which are **not in the repository**
-> — supply your own recordings to run them.
+> **Prerequisites**: the backend `.venv` must already exist (Quick start step 5) and the
+> `chattertot-db` container must be running (step 2) — `run_test_server.sh` exits early otherwise.
+>
+> **Test audio is not in the repository.** Every script under `benchmark/` reads WAVs from
+> `cascade/audio-test/`, which is gitignored — and that includes `test_regression.py`. It needs
+> four specific files: `xiaoyue_pure.wav` and `xiaoyun_full.wav` (wake-word audio), `verify_chat.wav`
+> (a longer utterance), and `parent1.wav` (a *different* speaker, for the voiceprint-filter test).
+> Record your own. Without them the script stops immediately and lists what is missing, rather than
+> throwing `FileNotFoundError` somewhere mid-run.
 
 **Voice-specific testing is counter-intuitive; two rules matter:**
 
@@ -307,6 +313,10 @@ echo cancellation can't remove everything. A headset removes the problem entirel
 
 **`funasr-server` crashes with `unable to upgrade to tcp, received 409`.** You passed `--model`
 instead of `--model-path`. See Quick start step 1.
+
+**Want to inspect what the microphone actually captured?** Debug audio is off by default. Start the
+backend with `DEBUG_AUDIO=1` and per-turn WAVs are written to `cascade/backend/debug_audio/`. It is
+off by default because children's speech is sensitive data and unbounded dumping fills the disk.
 
 **Coming from an earlier version?** Container, database and password names are all overridable.
 If you already run containers named `lym-asr` / `lym-db` with database `lym`, create `cascade/.env`

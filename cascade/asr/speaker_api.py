@@ -5,7 +5,11 @@ from funasr import AutoModel
 
 app = FastAPI(title="Speaker Embedding")
 
-model = AutoModel(model="iic/speech_campplus_sv_zh-cn_16k-common", device="cpu", disable_update=True)
+model = AutoModel(
+    model="/models/models/iic--speech_campplus_sv_zh-cn_16k-common/snapshots/master",
+    device="cpu",
+    disable_update=True,
+)
 
 
 @app.post("/embedding")

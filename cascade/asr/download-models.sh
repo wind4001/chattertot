@@ -14,15 +14,18 @@
 set -euo pipefail
 
 # Git Bash / MSYS2 会把 `-e MODELSCOPE_CACHE=/models` 里的 /models 当成 Unix 路径
-# 自动转换成 Windows 路径（如 G:/ruanjiananzhuang/Git/models），容器里拿到的是个
+# 自动转换成 Windows 路径（形如 `X:/<某目录>/models`），容器里拿到的是个
 # 废路径，模型会下到容器内的临时目录并随 --rm 一起消失——**而且不报错**。
-# 这个坑之前踩过（卷里残留的 G:--ruanjiananzhuang--Git--... 目录就是证据）。
+# 判据：卷里若残留形如 `X:--xxx--yyy--...` 的怪目录，就是这个坑留下的。
 # MSYS_NO_PATHCONV=1 关掉该转换；Linux/macOS 上设了也无害。
 export MSYS_NO_PATHCONV=1
 
 cd "$(dirname "$0")"
 
 IMAGE="${ASR_IMAGE:-cascade-asr:latest}"
+# 默认卷名假定 compose 项目名是 cascade（即从 cascade/ 目录执行 docker compose）。
+# 若你从别处用 `docker compose -f cascade/docker-compose.yml` 起服务，项目名会变成仓库目录名，
+# 卷名也随之不同（如 chattertot_asr_models）——那种情况下用 ASR_VOLUME 显式指定实际卷名。
 VOLUME="${ASR_VOLUME:-cascade_asr_models}"
 COMPOSE_FILE="../docker-compose.yml"
 
@@ -51,6 +54,7 @@ import sys
 from modelscope import snapshot_download
 
 EXPECTED_PREFIX = "/models/models/"
+EXPECTED_SUFFIX = "/snapshots/master"
 failed = []
 for m in sys.argv[1:]:
     try:
@@ -59,10 +63,17 @@ for m in sys.argv[1:]:
         print(f"  FAIL  {m}: {type(e).__name__}: {e}", flush=True)
         failed.append(m)
         continue
-    # 断言：下载必须落在挂载卷里。若不在此前缀下（例如 MSYS 把路径转换坏了），
+    # 断言 1：下载必须落在挂载卷里。若不在此前缀下（例如 MSYS 把路径转换坏了），
     # 模型会下到容器临时目录并随 --rm 消失——绝不能让它打印 OK 蒙混过去。
+    # 断言 2：落点必须以 /snapshots/master 结尾——三个服务（start.sh / kws_api.py /
+    # speaker_api.py）读的都是这个完整路径。只断言前缀太松，会漏掉"服务指错层级"
+    # 这类 bug（曾真实发生过：KWS 指向模型根目录，全新环境直接起不来）。
     if not path.startswith(EXPECTED_PREFIX):
         print(f"  FAIL  {m}: 落点 {path} 不在 {EXPECTED_PREFIX} 下（MSYS 路径转换？）", flush=True)
+        failed.append(m)
+        continue
+    if not path.endswith(EXPECTED_SUFFIX):
+        print(f"  FAIL  {m}: 落点 {path} 不以 {EXPECTED_SUFFIX} 结尾，服务会找不到模型", flush=True)
         failed.append(m)
         continue
     print(f"  OK    {m} -> {path}", flush=True)

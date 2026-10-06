@@ -8,7 +8,7 @@ from funasr import AutoModel
 
 app = FastAPI(title="KWS Detect")
 
-MODEL_DIR = "/models/models/iic--speech_sanm_kws_phone-xiaoyun-commands-online"
+MODEL_DIR = "/models/models/iic--speech_sanm_kws_phone-xiaoyun-commands-online/snapshots/master"
 KEYWORD = "小云小云"
 
 model = AutoModel(

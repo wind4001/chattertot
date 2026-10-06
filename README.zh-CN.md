@@ -229,7 +229,7 @@ cascade/
   db/init.sql       建表脚本
   docker-compose.yml
   benchmark/        实测与回归脚本（见「测试」）
-  models/           本地模型缓存（不进 git，见快速开始第 1 步）
+  （模型在 Docker 卷 `cascade_asr_models` 里，不在仓库目录内——见快速开始第 1 步）
 docs/               技术方案、调研、ADR
 server/             已放弃的第一版方案，见「历史」
 ```
@@ -250,8 +250,14 @@ bash cascade/backend/run_test_server.sh
 cd cascade/benchmark && python test_regression.py
 ```
 
-> `benchmark/` 下的其他脚本（`test_kws*.py`、`bench_*.py`）是历史实测脚本，依赖
-> `cascade/audio-test/` 里的音频，而**那些音频不在仓库里**——要跑需自备录音。
+> **前置条件**：后端 `.venv` 已建好（快速开始第 5 步）、`chattertot-db` 容器在跑（第 2 步）
+> ——否则 `run_test_server.sh` 会直接退出。
+>
+> **测试音频不在仓库里。** `benchmark/` 下**所有**脚本都从 `cascade/audio-test/` 读 WAV，
+> 而该目录被 gitignore ——**包括 `test_regression.py`**。它需要四个特定文件：
+> `xiaoyue_pure.wav`、`xiaoyun_full.wav`（唤醒词音频）、`verify_chat.wav`（一句较长的话）、
+> `parent1.wav`（**另一个说话人**，用于声纹过滤测试）。需自备录音；缺文件时脚本会**立刻列出
+> 缺哪些**，而不是跑到一半抛 `FileNotFoundError`。
 
 **语音类测试很反直觉，两条铁律必须记住：**
 
@@ -284,6 +290,9 @@ cd cascade/benchmark && python test_regression.py
 
 **`funasr-server` 报 `unable to upgrade to tcp, received 409`。** 用了 `--model` 而不是
 `--model-path`，见快速开始第 1 步。
+
+**想看麦克风到底录到了什么？** 调试音频默认关闭。启动后端时带上 `DEBUG_AUDIO=1`，每轮音频会
+落到 `cascade/backend/debug_audio/`。默认关闭是因为儿童语音属敏感数据，且无界落盘会占满磁盘。
 
 **从早期版本迁移过来？** 容器名 / 库名 / 口令都可用环境变量覆盖。如果你已经在跑
 `lym-asr` / `lym-db`、库名是 `lym`，建一个 `cascade/.env` 沿用旧名字即可——

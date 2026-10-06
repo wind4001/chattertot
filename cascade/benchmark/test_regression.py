@@ -1,14 +1,18 @@
 """状态机回归测试：覆盖 IDLE/ACTIVE/BUSY 三态与唤醒、声纹、打断、忽略逻辑。
 
-需先启动测试服务（8081，lym_test 库）：
+需先启动测试服务（8081，chattertot_test 库）：
   cd cascade/backend
   DB_URL=postgresql://postgres:chattertot_dev_pw@localhost:5432/chattertot_test \
     .venv/Scripts/python.exe -m uvicorn app:app --port 8081 --ws auto
 
 用法：python test_regression.py
+
+注意：测试音频不在仓库里（cascade/audio-test/ 被 gitignore），需自备——
+缺文件时脚本会立刻列出缺哪些，不会跑到一半才抛 FileNotFoundError。
 """
 import asyncio
 import json
+import os
 import sys
 import wave
 
@@ -17,13 +21,33 @@ import websockets
 WS_URL = "ws://localhost:8081/ws"
 AUDIO = "../audio-test"
 
-# 测试音频（KWS 把 TTS 的「小月小月」识别为「小云小云」，故可当唤醒词用）
+# 测试音频（KWS 把 TTS 的「小云小云」/「小月小月」都当唤醒词；后者是故意留的同音字场景）
 WAKE_ONLY = f"{AUDIO}/xiaoyue_pure.wav"      # 只说唤醒词
 WAKE_CONTENT = f"{AUDIO}/xiaoyun_full.wav"   # 唤醒词 + 内容（"给我讲个故事吧"）
-UTTERANCE = f"{AUDIO}/verify_chat.wav"       # 普通一句话（与小月同声纹）
-OTHER_SPEAKER = f"{AUDIO}/parent1.wav"       # 家长（非本轮说话人）
+UTTERANCE = f"{AUDIO}/verify_chat.wav"       # 普通一句话（与唤醒词同一说话人）
+OTHER_SPEAKER = f"{AUDIO}/parent1.wav"       # 另一个说话人（非本轮目标）
+
+REQUIRED_AUDIO = {
+    WAKE_ONLY: "只说唤醒词（如「小云小云」）",
+    WAKE_CONTENT: "唤醒词 + 内容一口气说完（如「小云小云，给我讲个故事吧」）",
+    UTTERANCE: "一句较长的普通话（与唤醒词同一说话人）",
+    OTHER_SPEAKER: "**另一个说话人**的录音（用于声纹过滤测试）",
+}
 
 results = []
+
+
+def check_audio_or_exit():
+    """缺测试音频就立刻报清楚，别跑到一半才 FileNotFoundError。"""
+    missing = [p for p in REQUIRED_AUDIO if not os.path.exists(p)]
+    if not missing:
+        return
+    print("缺测试音频（cascade/audio-test/ 不在仓库里，需自备录音）：\n")
+    for p in missing:
+        print(f"  ✗ {p}")
+        print(f"      {REQUIRED_AUDIO[p]}")
+    print(f"\n放到 {os.path.abspath(AUDIO)}/ 后重跑。")
+    sys.exit(2)
 
 
 def check(name, ok, detail=""):
@@ -183,4 +207,5 @@ async def main():
     sys.exit(0 if passed == total else 1)
 
 
+check_audio_or_exit()   # 缺音频就干净退出，不进 asyncio（否则 traceback 很吵）
 asyncio.run(main())
