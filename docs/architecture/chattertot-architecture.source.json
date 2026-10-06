@@ -4,13 +4,13 @@
   "meta": {
     "title": "chattertot 级联语音陪伴 · 运行时架构",
     "locale": "zh-CN",
-    "output": ".archify/architecture-chattertot-cascade-20261003-225856/chattertot-architecture.html",
+    "output": ".archify/architecture-chattertot-cascade-20261006-124255/chattertot-architecture.html",
     "quality_profile": "showcase",
     "repository": {
       "url": "https://github.com/wind4001/chattertot.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "af71dbb8778e04d860a536311a2e3ecf7a58cd83"
+      "revision": "094c6af2946647fc590a70a808ababc00eedf09b"
     }
   },
   "components": [
@@ -20,12 +20,32 @@
       "label": "浏览器前端",
       "sublabel": "麦克风 + PCM 播放器",
       "tag": "系统级 AEC",
-      "pos": [20, 300],
-      "size": [145, 72],
+      "pos": [
+        20,
+        300
+      ],
+      "size": [
+        145,
+        72
+      ],
       "sources": [
-        { "path": "cascade/backend/static/app.js", "line": 5, "end_line": 57, "label": "PcmPlayer" },
-        { "path": "cascade/backend/static/app.js", "line": 123, "end_line": 132, "label": "采音 + AEC" },
-        { "path": "cascade/backend/static/app.js", "line": 75, "label": "WS 连接" }
+        {
+          "path": "cascade/backend/static/app.js",
+          "line": 5,
+          "end_line": 57,
+          "label": "PcmPlayer"
+        },
+        {
+          "path": "cascade/backend/static/app.js",
+          "line": 123,
+          "end_line": 132,
+          "label": "采音 + AEC"
+        },
+        {
+          "path": "cascade/backend/static/app.js",
+          "line": 75,
+          "label": "WS 连接"
+        }
       ]
     },
     {
@@ -34,12 +54,32 @@
       "label": "FastAPI 后端",
       "sublabel": "WebSocket :8080",
       "tag": "跑在宿主机",
-      "pos": [300, 285],
-      "size": [165, 110],
+      "pos": [
+        300,
+        285
+      ],
+      "size": [
+        165,
+        110
+      ],
       "sources": [
-        { "path": "cascade/backend/app.py", "line": 173, "end_line": 176, "label": "WS 端点" },
-        { "path": "cascade/backend/app.py", "line": 407, "end_line": 433, "label": "VAD / 判停主循环" },
-        { "path": "cascade/backend/app.py", "line": 449, "label": "监听端口" }
+        {
+          "path": "cascade/backend/app.py",
+          "line": 173,
+          "end_line": 176,
+          "label": "WS 端点"
+        },
+        {
+          "path": "cascade/backend/app.py",
+          "line": 407,
+          "end_line": 433,
+          "label": "VAD / 判停主循环"
+        },
+        {
+          "path": "cascade/backend/app.py",
+          "line": 449,
+          "label": "监听端口"
+        }
       ]
     },
     {
@@ -47,37 +87,88 @@
       "type": "database",
       "label": "PostgreSQL + pgvector",
       "sublabel": "messages / profile",
-      "pos": [630, 305],
-      "size": [180, 72],
+      "pos": [
+        630,
+        305
+      ],
+      "size": [
+        180,
+        72
+      ],
       "sources": [
-        { "path": "cascade/db/init.sql", "line": 9, "label": "messages 表" },
-        { "path": "cascade/db/init.sql", "line": 24, "label": "profile 表" },
-        { "path": "cascade/backend/db.py", "line": 9, "label": "连接串" }
+        {
+          "path": "cascade/db/init.sql",
+          "line": 9,
+          "label": "messages 表"
+        },
+        {
+          "path": "cascade/db/init.sql",
+          "line": 24,
+          "label": "profile 表"
+        },
+        {
+          "path": "cascade/backend/db.py",
+          "line": 9,
+          "label": "连接串"
+        }
       ]
     },
     {
       "id": "llm",
       "type": "cloud",
-      "label": "DeepSeek LLM",
+      "label": "LLM（OpenAI 兼容）",
       "sublabel": "deepseek-v4-flash",
-      "pos": [175, 80],
-      "size": [155, 60],
+      "pos": [
+        175,
+        80
+      ],
+      "size": [
+        155,
+        60
+      ],
       "sources": [
-        { "path": "cascade/backend/llm.py", "line": 9, "end_line": 11, "label": "配置" },
-        { "path": "cascade/backend/llm.py", "line": 23, "label": "对话" },
-        { "path": "cascade/backend/llm.py", "line": 71, "label": "记忆摘要" }
+        {
+          "path": "cascade/backend/llm.py",
+          "line": 9,
+          "end_line": 11,
+          "label": "配置"
+        },
+        {
+          "path": "cascade/backend/llm.py",
+          "line": 23,
+          "label": "对话"
+        },
+        {
+          "path": "cascade/backend/llm.py",
+          "line": 71,
+          "label": "记忆摘要"
+        }
       ]
     },
     {
       "id": "tts",
       "type": "cloud",
-      "label": "豆包 TTS 2.0",
+      "label": "TTS（流式，可替换）",
       "sublabel": "seed-tts-2.0 · SSE",
-      "pos": [400, 80],
-      "size": [155, 60],
+      "pos": [
+        400,
+        80
+      ],
+      "size": [
+        155,
+        60
+      ],
       "sources": [
-        { "path": "cascade/backend/tts.py", "line": 13, "label": "SSE 端点" },
-        { "path": "cascade/backend/tts.py", "line": 63, "label": "流式合成" }
+        {
+          "path": "cascade/backend/tts.py",
+          "line": 13,
+          "label": "SSE 端点"
+        },
+        {
+          "path": "cascade/backend/tts.py",
+          "line": 63,
+          "label": "流式合成"
+        }
       ]
     },
     {
@@ -85,11 +176,25 @@
       "type": "backend",
       "label": "SenseVoice ASR",
       "sublabel": ":8000 语音转文字",
-      "pos": [130, 545],
-      "size": [155, 60],
+      "pos": [
+        130,
+        545
+      ],
+      "size": [
+        155,
+        60
+      ],
       "sources": [
-        { "path": "cascade/backend/app.py", "line": 24, "label": "调用地址" },
-        { "path": "cascade/asr/start.sh", "line": 6, "label": "funasr-server" }
+        {
+          "path": "cascade/backend/app.py",
+          "line": 24,
+          "label": "调用地址"
+        },
+        {
+          "path": "cascade/asr/start.sh",
+          "line": 6,
+          "label": "funasr-server"
+        }
       ]
     },
     {
@@ -97,11 +202,26 @@
       "type": "backend",
       "label": "SANM KWS 唤醒",
       "sublabel": ":8002 检测「小云小云」",
-      "pos": [340, 545],
-      "size": [155, 60],
+      "pos": [
+        340,
+        545
+      ],
+      "size": [
+        155,
+        60
+      ],
       "sources": [
-        { "path": "cascade/backend/app.py", "line": 80, "label": "调用地址" },
-        { "path": "cascade/asr/kws_api.py", "line": 11, "end_line": 12, "label": "模型与关键词" }
+        {
+          "path": "cascade/backend/app.py",
+          "line": 80,
+          "label": "调用地址"
+        },
+        {
+          "path": "cascade/asr/kws_api.py",
+          "line": 11,
+          "end_line": 12,
+          "label": "模型与关键词"
+        }
       ]
     },
     {
@@ -109,11 +229,25 @@
       "type": "backend",
       "label": "CAM++ 声纹",
       "sublabel": ":8001 192 维向量",
-      "pos": [550, 545],
-      "size": [155, 60],
+      "pos": [
+        550,
+        545
+      ],
+      "size": [
+        155,
+        60
+      ],
       "sources": [
-        { "path": "cascade/backend/app.py", "line": 50, "label": "调用地址" },
-        { "path": "cascade/asr/speaker_api.py", "line": 8, "label": "CAM++ 模型" }
+        {
+          "path": "cascade/backend/app.py",
+          "line": 50,
+          "label": "调用地址"
+        },
+        {
+          "path": "cascade/asr/speaker_api.py",
+          "line": 8,
+          "label": "CAM++ 模型"
+        }
       ]
     }
   ],
@@ -121,25 +255,74 @@
     {
       "kind": "security-group",
       "label": "公网 API · API Key 鉴权",
-      "wraps": ["llm", "tts"],
+      "wraps": [
+        "llm",
+        "tts"
+      ],
       "pad": 24
     },
     {
       "kind": "security-group",
       "label": "本地推理容器 lym-asr · CPU 2.5核 / 6G",
-      "wraps": ["asr", "kws", "speaker"],
+      "wraps": [
+        "asr",
+        "kws",
+        "speaker"
+      ],
       "pad": 28
     }
   ],
   "connections": [
-    { "id": "mic-uplink", "from": "browser", "to": "backend", "label": "WS · PCM 50ms/片", "variant": "emphasis" },
-    { "id": "audio-downlink", "from": "backend", "to": "browser", "label": "PCM 流 · 边收边播", "variant": "dashed" },
-    { "id": "asr-call", "from": "backend", "to": "asr", "label": "WAV → 文本" },
-    { "id": "kws-call", "from": "backend", "to": "kws", "label": "命中即唤醒" },
-    { "id": "speaker-call", "from": "backend", "to": "speaker", "label": "提取 / 比对声纹" },
-    { "id": "llm-call", "from": "backend", "to": "llm", "label": "对话 + 摘要" },
-    { "id": "tts-call", "from": "backend", "to": "tts", "label": "文本 → PCM" },
-    { "id": "store", "from": "backend", "to": "pg", "label": "读写历史 / 档案" }
+    {
+      "id": "mic-uplink",
+      "from": "browser",
+      "to": "backend",
+      "label": "WS · PCM 50ms/片",
+      "variant": "emphasis"
+    },
+    {
+      "id": "audio-downlink",
+      "from": "backend",
+      "to": "browser",
+      "label": "PCM 流 · 边收边播",
+      "variant": "dashed"
+    },
+    {
+      "id": "asr-call",
+      "from": "backend",
+      "to": "asr",
+      "label": "WAV → 文本"
+    },
+    {
+      "id": "kws-call",
+      "from": "backend",
+      "to": "kws",
+      "label": "命中即唤醒"
+    },
+    {
+      "id": "speaker-call",
+      "from": "backend",
+      "to": "speaker",
+      "label": "提取 / 比对声纹"
+    },
+    {
+      "id": "llm-call",
+      "from": "backend",
+      "to": "llm",
+      "label": "对话 + 摘要"
+    },
+    {
+      "id": "tts-call",
+      "from": "backend",
+      "to": "tts",
+      "label": "文本 → PCM"
+    },
+    {
+      "id": "store",
+      "from": "backend",
+      "to": "pg",
+      "label": "读写历史 / 档案"
+    }
   ],
   "cards": [
     {

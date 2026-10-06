@@ -2,7 +2,7 @@
 
 需先启动测试服务（8081，lym_test 库）：
   cd cascade/backend
-  DB_URL=postgresql://postgres:lym123456@localhost:5432/lym_test \
+  DB_URL=postgresql://postgres:chattertot_dev_pw@localhost:5432/chattertot_test \
     .venv/Scripts/python.exe -m uvicorn app:app --port 8081 --ws auto
 
 用法：python test_regression.py
