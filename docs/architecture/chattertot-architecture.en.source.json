@@ -2,9 +2,9 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "chattertot 级联语音陪伴 · 运行时架构",
-    "locale": "zh-CN",
-    "output": ".archify/20261006-125513-zh/chattertot-architecture.html",
+    "title": "chattertot cascade voice companion · runtime architecture",
+    "locale": "en",
+    "output": ".archify/20261006-125513-en/chattertot-architecture.html",
     "quality_profile": "showcase",
     "repository": {
       "url": "https://github.com/wind4001/chattertot.git",
@@ -17,9 +17,9 @@
     {
       "id": "browser",
       "type": "frontend",
-      "label": "浏览器前端",
-      "sublabel": "麦克风 + PCM 播放器",
-      "tag": "系统级 AEC",
+      "label": "Browser frontend",
+      "sublabel": "mic + PCM player",
+      "tag": "system-level AEC",
       "pos": [
         20,
         300
@@ -39,21 +39,21 @@
           "path": "cascade/backend/static/app.js",
           "line": 123,
           "end_line": 132,
-          "label": "采音 + AEC"
+          "label": "mic capture + AEC"
         },
         {
           "path": "cascade/backend/static/app.js",
           "line": 75,
-          "label": "WS 连接"
+          "label": "WebSocket connection"
         }
       ]
     },
     {
       "id": "backend",
       "type": "backend",
-      "label": "FastAPI 后端",
+      "label": "FastAPI backend",
       "sublabel": "WebSocket :8080",
-      "tag": "跑在宿主机",
+      "tag": "runs on the host",
       "pos": [
         300,
         285
@@ -67,18 +67,18 @@
           "path": "cascade/backend/app.py",
           "line": 173,
           "end_line": 176,
-          "label": "WS 端点"
+          "label": "WebSocket endpoint"
         },
         {
           "path": "cascade/backend/app.py",
           "line": 407,
           "end_line": 433,
-          "label": "VAD / 判停主循环"
+          "label": "VAD / end-of-turn loop"
         },
         {
           "path": "cascade/backend/app.py",
           "line": 449,
-          "label": "监听端口"
+          "label": "listening port"
         }
       ]
     },
@@ -99,24 +99,24 @@
         {
           "path": "cascade/db/init.sql",
           "line": 9,
-          "label": "messages 表"
+          "label": "messages table"
         },
         {
           "path": "cascade/db/init.sql",
           "line": 24,
-          "label": "profile 表"
+          "label": "profile table"
         },
         {
           "path": "cascade/backend/db.py",
           "line": 9,
-          "label": "连接串"
+          "label": "connection string"
         }
       ]
     },
     {
       "id": "llm",
       "type": "cloud",
-      "label": "LLM（OpenAI 兼容）",
+      "label": "LLM (OpenAI-compat.)",
       "sublabel": "deepseek-v4-flash",
       "pos": [
         175,
@@ -131,24 +131,24 @@
           "path": "cascade/backend/llm.py",
           "line": 9,
           "end_line": 11,
-          "label": "配置"
+          "label": "config"
         },
         {
           "path": "cascade/backend/llm.py",
           "line": 23,
-          "label": "对话"
+          "label": "dialogue"
         },
         {
           "path": "cascade/backend/llm.py",
           "line": 71,
-          "label": "记忆摘要"
+          "label": "memory summarisation"
         }
       ]
     },
     {
       "id": "tts",
       "type": "cloud",
-      "label": "TTS（流式，可替换）",
+      "label": "TTS (swappable)",
       "sublabel": "seed-tts-2.0 · SSE",
       "pos": [
         400,
@@ -162,12 +162,12 @@
         {
           "path": "cascade/backend/tts.py",
           "line": 13,
-          "label": "SSE 端点"
+          "label": "SSE endpoint"
         },
         {
           "path": "cascade/backend/tts.py",
           "line": 63,
-          "label": "流式合成"
+          "label": "streaming synthesis"
         }
       ]
     },
@@ -175,7 +175,7 @@
       "id": "asr",
       "type": "backend",
       "label": "SenseVoice ASR",
-      "sublabel": ":8000 语音转文字",
+      "sublabel": ":8000 speech → text",
       "pos": [
         130,
         545
@@ -188,7 +188,7 @@
         {
           "path": "cascade/backend/app.py",
           "line": 24,
-          "label": "调用地址"
+          "label": "service URL"
         },
         {
           "path": "cascade/asr/start.sh",
@@ -200,8 +200,8 @@
     {
       "id": "kws",
       "type": "backend",
-      "label": "SANM KWS 唤醒",
-      "sublabel": ":8002 检测「小云小云」",
+      "label": "SANM KWS wake word",
+      "sublabel": ":8002 detects \"小云小云\"",
       "pos": [
         340,
         545
@@ -214,21 +214,21 @@
         {
           "path": "cascade/backend/app.py",
           "line": 80,
-          "label": "调用地址"
+          "label": "service URL"
         },
         {
           "path": "cascade/asr/kws_api.py",
           "line": 11,
           "end_line": 12,
-          "label": "模型与关键词"
+          "label": "model + keyword"
         }
       ]
     },
     {
       "id": "speaker",
       "type": "backend",
-      "label": "CAM++ 声纹",
-      "sublabel": ":8001 192 维向量",
+      "label": "CAM++ voiceprint",
+      "sublabel": ":8001 192-dim embedding",
       "pos": [
         550,
         545
@@ -241,12 +241,12 @@
         {
           "path": "cascade/backend/app.py",
           "line": 50,
-          "label": "调用地址"
+          "label": "service URL"
         },
         {
           "path": "cascade/asr/speaker_api.py",
           "line": 8,
-          "label": "CAM++ 模型"
+          "label": "CAM++ model"
         }
       ]
     }
@@ -254,7 +254,7 @@
   "boundaries": [
     {
       "kind": "security-group",
-      "label": "公网 API · API Key 鉴权",
+      "label": "Public APIs · API key auth",
       "wraps": [
         "llm",
         "tts"
@@ -263,7 +263,7 @@
     },
     {
       "kind": "security-group",
-      "label": "本地推理容器 · CPU 2.5核 / 6G",
+      "label": "Local inference container · CPU 2.5 cores / 6 GB",
       "wraps": [
         "asr",
         "kws",
@@ -277,89 +277,89 @@
       "id": "mic-uplink",
       "from": "browser",
       "to": "backend",
-      "label": "WS · PCM 50ms/片",
+      "label": "WS · PCM 50 ms chunks",
       "variant": "emphasis"
     },
     {
       "id": "audio-downlink",
       "from": "backend",
       "to": "browser",
-      "label": "PCM 流 · 边收边播",
+      "label": "PCM · gapless playback",
       "variant": "dashed"
     },
     {
       "id": "asr-call",
       "from": "backend",
       "to": "asr",
-      "label": "WAV → 文本"
+      "label": "WAV → text"
     },
     {
       "id": "kws-call",
       "from": "backend",
       "to": "kws",
-      "label": "命中即唤醒"
+      "label": "a hit wakes the session"
     },
     {
       "id": "speaker-call",
       "from": "backend",
       "to": "speaker",
-      "label": "提取 / 比对声纹"
+      "label": "extract / compare voiceprint"
     },
     {
       "id": "llm-call",
       "from": "backend",
       "to": "llm",
-      "label": "对话 + 摘要"
+      "label": "dialogue + summarisation"
     },
     {
       "id": "tts-call",
       "from": "backend",
       "to": "tts",
-      "label": "文本 → PCM"
+      "label": "text → PCM"
     },
     {
       "id": "store",
       "from": "backend",
       "to": "pg",
-      "label": "读写历史 / 档案"
+      "label": "read/write history + profile"
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "实时语音链路",
+      "title": "Real-time audio path",
       "items": [
-        "后端进程内做 VAD：RMS 阈值 300，静音 800ms 判停（EOT）",
-        "单轮音频缓存上限 10s；活跃态静默 30s 回待机",
-        "TTS 走 SSE 流式，前端按 24kHz 时间线无缝调度播放"
+        "VAD runs in the backend process: RMS threshold 300; 800 ms of silence ends the turn (EOT)",
+        "Buffered audio is capped at 10 s per turn; active sessions idle out after 30 s",
+        "TTS streams over SSE; the browser schedules 24 kHz playback on one timeline for gapless audio"
       ]
     },
     {
       "dot": "violet",
-      "title": "唤醒与声纹",
+      "title": "Wake word and voiceprint",
       "items": [
-        "待机态由 SANM KWS 检测「小云小云」，命中即转活跃",
-        "AI 播放中说唤醒词可打断：取消当前轮任务并停播",
-        "声纹每轮自成一份：唤醒句或首句确立，静默超时释放，不落库",
-        "余弦相似度阈值 0.5，低于则视为旁人插话并忽略"
+        "Idle audio is checked by SANM KWS for \"小云小云\" (xiǎo yún xiǎo yún); a hit starts an active session",
+        "Saying the wake word while it talks barge-ins: the current turn is cancelled and playback stops",
+        "The voiceprint is derived per turn — from the wake utterance or the first long sentence — and released on idle; never persisted",
+        "Cosine similarity threshold 0.5; below that is treated as someone else talking and ignored"
       ]
     },
     {
       "dot": "emerald",
-      "title": "两层记忆",
+      "title": "Two-tier memory",
       "items": [
-        "短期：messages 表，最近 20 条进 LLM 上下文",
-        "长期：profile.facts 注入 system prompt，靠 last_message_id 水位线增量摘要",
-        "会话结束（静默超时或断连）触发摘要；当前全局单流，无用户身份"
+        "Short-term: messages table — the most recent 20 entries go into the LLM context",
+        "Long-term: profile.facts injected into the system prompt, summarised incrementally via a last_message_id watermark",
+        "Summarisation runs at session end (idle timeout or disconnect); currently one global stream with no user identity"
       ]
     },
     {
       "dot": "amber",
-      "title": "部署事实",
+      "title": "Deployment facts",
       "items": [
-        "docker-compose 只含 ASR 容器与数据库，后端跑在宿主机",
-        "ASR 容器一容器三进程：funasr-server :8000 / 声纹 :8001 / KWS :8002",
-        "前端静态文件由后端直接托管，无独立前端服务"
+        "docker-compose holds only the ASR container and the database; the backend runs on the host",
+        "One ASR container, three processes: funasr-server :8000 / voiceprint :8001 / KWS :8002",
+        "The frontend is served by the backend — no separate frontend service"
       ]
     }
   ]

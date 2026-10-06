@@ -9,10 +9,10 @@ yourself.
 
 **English** | [简体中文](README.zh-CN.md)
 
-![chattertot runtime architecture](docs/assets/chattertot-architecture.png)
+![chattertot runtime architecture](docs/assets/chattertot-architecture.en.png)
 
 <sub>Interactive version (clickable nodes with source-code evidence, dark mode):
-[docs/architecture/chattertot-architecture.html](docs/architecture/chattertot-architecture.html)</sub>
+[docs/architecture/chattertot-architecture.en.html](docs/architecture/chattertot-architecture.en.html)</sub>
 
 ---
 
