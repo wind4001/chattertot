@@ -1,0 +1,4 @@
+# 基础镜像已含 funasr/modelscope/torch/numpy，这里只补 Web 层
+fastapi
+uvicorn
+python-multipart

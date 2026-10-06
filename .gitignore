@@ -1,0 +1,27 @@
+node_modules/
+.env
+dist/
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.codegraph/
+
+# 工具工作目录（生成物，不进 git；成图另存到 docs/）
+.archify/
+.playwright-mcp/
+
+# 模型文件（大，不进 git）
+cascade/models/
+*.onnx
+*.tar.bz2
+
+# 音频/测试音频（隐私 + 大）
+cascade/audio-test/
+cascade/backend/debug_audio/
+*.wav
+*.m4a
+*.mp3
+*.pcm
+.code-review-graph/

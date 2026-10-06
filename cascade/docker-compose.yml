@@ -1,0 +1,46 @@
+# 容器名 / 库名 / 口令都可用环境变量覆盖（在 cascade/.env 里设即可）。
+# 默认值是 chattertot-*；如果你是从早期版本迁移过来、想沿用旧名字，见 README「排障」。
+services:
+  asr:
+    build: ./asr
+    container_name: ${ASR_CONTAINER:-chattertot-asr}
+    ports:
+      # 只绑本机回环：后端跑在宿主机，只需要 localhost 可达。
+      # 绑 0.0.0.0 会把三个模型服务暴露到局域网。
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8001"
+      - "127.0.0.1:8002:8002"
+    environment:
+      - MODELSCOPE_CACHE=/models
+    volumes:
+      - asr_models:/models
+    deploy:
+      resources:
+        limits:
+          cpus: '2.5'
+          memory: 6G
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:0.8.2-pg18-trixie
+    container_name: ${DB_CONTAINER:-chattertot-db}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chattertot_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-chattertot}
+    ports:
+      # 只绑本机回环。绑 0.0.0.0 会让数据库连带下面的开发默认口令一起暴露到网络。
+      # 注意：POSTGRES_PASSWORD 只在**数据卷为空时**生效；已有 pg_data 的库改这里
+      # 不会改掉实际口令，只会导致后端连不上。要换口令需重建卷或进库 ALTER USER。
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql
+      # 首次初始化（pg_data 卷为空）时自动建表。
+      # 注意：/docker-entrypoint-initdb.d 只在数据目录为空时执行一次；
+      # 已有数据的卷不会重跑，需要手动执行（见 README 快速开始）。
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+
+volumes:
+  asr_models:
+  pg_data:

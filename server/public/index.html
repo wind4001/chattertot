@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>豆包实时语音 · M1 骨架</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #111; color: #eee; max-width: 680px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 20px; }
+    button { padding: 8px 16px; margin: 4px 6px 4px 0; cursor: pointer; border: 1px solid #444; background: #222; color: #eee; border-radius: 6px; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    label { display: block; margin-top: 14px; font-size: 13px; color: #aaa; }
+    input[type=text], textarea, select { width: 100%; background: #1a1a1a; color: #eee; border: 1px solid #333; border-radius: 4px; padding: 8px; box-sizing: border-box; font-size: 14px; }
+    textarea { resize: vertical; }
+    #log { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 12px; min-height: 220px; font-size: 14px; white-space: pre-wrap; overflow-y: auto; max-height: 360px; }
+    #log .asr { color: #8ab4f8; }
+    #log .tts { color: #81c995; }
+    #log .sys { color: #888; }
+    #log .err { color: #f28b82; }
+    #status { margin-left: 12px; color: #888; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>豆包实时语音 · M1 骨架</h1>
+  <div>
+    <button id="btnConnect">连接</button>
+    <button id="btnStart" disabled>开始会话</button>
+    <button id="btnStop" disabled>结束会话</button>
+    <span id="status">未连接</span>
+  </div>
+
+  <label>音色 <input type="text" id="voice" value="zh_female_vv_jupiter_bigtts" /></label>
+  <label>人设（system prompt）<textarea id="prompt" rows="3">你是一个温柔、善解人意的语音陪伴角色，说话自然、简短，带一点关心。</textarea></label>
+  <label>文字输入（回车发送文本消息）<input type="text" id="textQuery" placeholder="输入文字，回车发送" /></label>
+
+  <div id="log"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

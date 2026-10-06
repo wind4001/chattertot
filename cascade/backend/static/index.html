@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>小云 · 语音陪伴</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #111; color: #eee; max-width: 560px; margin: 0 auto; padding: 24px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: 1px solid #555; background: #222; color: #eee; border-radius: 8px; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #status { color: #888; font-size: 13px; margin-left: 12px; }
+    #log { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 16px; min-height: 200px; margin-top: 16px; font-size: 16px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; }
+    #log .asr { color: #8ab4f8; }
+    #log .ai { color: #81c995; }
+    #log .sys { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>小云 · 语音陪伴</h1>
+  <div>
+    <button id="btnStart">开始聊天</button>
+    <button id="btnStop" disabled>结束</button>
+    <span id="status">未开始</span>
+  </div>
+  <div id="log"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
