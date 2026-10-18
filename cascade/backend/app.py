@@ -14,18 +14,30 @@ import wave
 import httpx
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 import db
 import llm
 import tts
+import health
+from reply import Reply, ReplyError, TurnTiming
+from endpointing import EndpointDetector
+from story import StorySession
 
 app = FastAPI(title="Cascade Backend")
 
+
+@app.get("/health/live")
+async def health_live():
+    return health.live_report()
+
+
+@app.get("/health/ready")
+async def health_ready():
+    report = await health.check_readiness()
+    return JSONResponse(report, status_code=200 if report["status"] == "ready" else 503)
+
 ASR_URL = "http://localhost:8000/v1/audio/transcriptions"
-
-# VAD 参数（可调）
-SPEECH_THRESHOLD = 300  # RMS 阈值（int16），低于视为静音
-
 
 def rms_int16(pcm: bytes) -> int:
     if len(pcm) < 2:
@@ -50,9 +62,7 @@ def pcm_to_wav(pcm: bytes, sample_rate: int = 16000) -> bytes:
 SPEAKER_URL = "http://localhost:8001/embedding"
 SPEAKER_THRESHOLD = 0.5  # 余弦相似度阈值，低于视为非当前说话人（实测：孩子 0.745 / 家长 0.16~0.36）
 
-# EOT 判停参数
-EOT_MS = 800  # 静音判停阈值（固定；埋点采集真实停顿时长后，v1.x 再上自适应）
-MAX_AUDIO_BYTES = 32000 * 10  # 音频最大缓存 10s（16kHz 16bit = 32000 B/s）
+# EOT 参数和独立分帧判停逻辑见 endpointing.py。
 IDLE_TIMEOUT_MS = 30000  # 活跃态静默超时（从客户端播完 AI 语音起算），超时回待机
 VOICE_MIN_BYTES = 48000  # 确立本轮目标声纹所需的最短音频（1.5s；再短声纹不可靠）
 DEBUG_AUDIO = os.getenv("DEBUG_AUDIO", "0") == "1"  # 调试音频落盘开关（默认关，避免无界累积）
@@ -177,6 +187,8 @@ async def ws_endpoint(ws: WebSocket):
     speech = bytearray()
     is_speaking = False
     silence_ms = 0
+    endpoint = EndpointDetector()  # 每条连接独立估计底噪，不跨孩子共享
+    story = StorySession()
     busy = False  # AI 播放中（含客户端播放期，直到 play_end / 兜底超时）
     cancelable_task = None  # 当前可被唤醒词打断取消的任务（对话轮次 / 打断回应播放）
     idle_ms = 0  # ACTIVE 静默计时（客户端播完 AI 语音后才开始累计）
@@ -185,36 +197,45 @@ async def ws_endpoint(ws: WebSocket):
     play_rms_n = 0
     play_rms_max = 0
     reference_embedding = None  # 本轮目标声纹（唤醒句或唤醒后首句确立，轮次结束释放）
+    connection_tasks = set()
+    current_reply = None
+    bargein_task = None
+
+    def spawn_task(coro):
+        task = asyncio.create_task(coro)
+        connection_tasks.add(task)
+        task.add_done_callback(connection_tasks.discard)
+        return task
 
     # 无全局注册：每轮对话自成声纹
     await ws.send_json({"type": "idle"})
 
-    async def play_reply_and_wait(reply: str, my_turn: int):
-        """播放回复；等客户端播完（play_end）或兜底超时，之后才开始计静默。"""
-        nonlocal busy, idle_ms
-        total = 0
-        await ws.send_json({"type": "ai_text", "text": reply})
-        async for pcm_chunk in tts.synthesize_stream(reply):
-            total += len(pcm_chunk)
-            await ws.send_json({
-                "type": "ai_audio",
-                "audio": base64.b64encode(pcm_chunk).decode("ascii"),
-                "sample_rate": 24000,
-            })
-        wait_s = total / 48000 + 1.0  # 24kHz 16bit = 48000 B/s，+1s 余量
-        print(f"[TTS] 发完 {total/48000:.1f}s 音频，等客户端播完", flush=True)
-        await asyncio.sleep(wait_s)
-        if seq == my_turn:  # play_end 没来，兜底
-            print("[播放] 兜底超时（未收到 play_end）", flush=True)
-            busy = False
-            idle_ms = 0
+    def make_reply(my_turn, timing):
+        nonlocal current_reply
+        current_reply = Reply(my_turn, ws.send_json, timing, lambda: seq == my_turn)
+        return current_reply
 
-    async def process_turn(speech_bytes: bytes, text_override=None):
+    async def play_reply_and_wait(text: str, my_turn: int, timing):
+        async def fixed_text():
+            yield text
+        output = make_reply(my_turn, timing)
+        try:
+            await output.generate(fixed_text(), tts.synthesize_stream, source="fixed")
+        except ReplyError as error:
+            await output.send("response_error", stage=error.stage, message="小云暂时发不出声音，请稍后再试。")
+            await output.finish()
+        await output.wait_played()
+
+    async def process_turn(speech_bytes: bytes, text_override=None, timing=None):
         """ACTIVE：确立/验证本轮声纹 → ASR → LLM → TTS。"""
         nonlocal busy, idle_ms, reference_embedding, seq
         seq += 1
         my_turn = seq
         busy = True  # 本轮处理中：禁止并发轮次（唤醒/打断路径直接调用时也要置位）
+        timing = timing or TurnTiming()
+        timing.turn_id = my_turn
+        story_plan = None
+        output = None
         try:
             wav = pcm_to_wav(speech_bytes)
             if text_override is None:
@@ -237,7 +258,9 @@ async def ws_endpoint(ws: WebSocket):
                             return
                     except Exception as e:
                         print(f"[声纹] 验证失败: {e}，放行", flush=True)
+                timing.mark("speaker_done")
                 text = await asr_text(wav)
+                timing.mark("asr_done")
             else:
                 text = text_override
             name = save_debug_wav(speech_bytes, "turn")
@@ -249,35 +272,70 @@ async def ws_endpoint(ws: WebSocket):
                 print(f"[轮次] 只有唤醒词 {text!r}，忽略", flush=True)
                 return
             await ws.send_json({"type": "asr_text", "text": text})
+            story_plan = story.begin(strip_wake_word(text))
             history = []
             facts = ""
-            try:
-                history = await db.get_recent_messages(20)
-                facts = (await db.get_profile())["facts"]  # 长期记忆档案（每轮取最新）
-            except Exception:
-                pass
-            print(f"[MEM] 上下文 历史={len(history)}条 长期记忆={len(facts)}字", flush=True)
-            reply = await llm.chat(text, history, facts)
-            if reply is None:
-                print("[LLM] 熔断降级，播兜底话术", flush=True)
-                reply = "刚刚我没听清，你再说一遍好吗？"
+            if story_plan is not None:
+                history = story_plan.history
             else:
                 try:
-                    await db.add_message("user", text)
-                    await db.add_message("assistant", reply)
-                except Exception:
-                    pass
-            await play_reply_and_wait(reply, my_turn)
+                    history = await db.get_recent_messages(20)
+                    facts = (await db.get_profile())["facts"]  # 长期记忆档案（每轮取最新）
+                except Exception as error:
+                    print(f"[MEM] 读取失败: {type(error).__name__}", flush=True)
+            timing.mark("memory_loaded")
+            print(f"[MEM] 上下文 历史={len(history)}条 长期记忆={len(facts)}字", flush=True)
+            output = make_reply(my_turn, timing)
+            try:
+                if story_plan is not None and story_plan.reply is not None:
+                    async def fixed_story_text():
+                        yield story_plan.reply
+                    stream = fixed_story_text()
+                elif story_plan is not None:
+                    stream = llm.chat_stream(text, history, instruction=story_plan.instruction)
+                else:
+                    stream = llm.chat_stream(text, history, facts)
+                reply = await output.generate(stream, tts.synthesize_stream,
+                                              source='fixed' if story_plan and story_plan.reply else 'llm')
+            except ReplyError as error:
+                message = "连接暂时不顺畅，请再试一次。" if error.stage == "llm" else "小云暂时发不出声音，请稍后再试。"
+                await output.send("response_error", stage=error.stage, message=message)
+                if error.stage == "llm" and not output.pcm_bytes:
+                    seq += 1
+                    my_turn = seq
+                    await play_reply_and_wait("刚刚连接有点不顺，你再说一遍好吗？", my_turn, timing)
+                else:
+                    await output.finish()
+                    await output.wait_played()
+                return
+            if story_plan is not None:
+                story.finish(reply, ending=story_plan.ending)
+                await output.send('story_mode', phase=story.phase)
+                await output.wait_played()
+                return
+            try:
+                await db.add_message("user", text)
+                await db.add_message("assistant", reply)
+                timing.mark("memory_saved")
+            except Exception as error:
+                print(f"[MEM] 保存失败: {type(error).__name__}", flush=True)
+                await output.send("response_error", stage="memory", message="这一轮记忆暂时没保存，小云仍然可以陪你聊。")
+            await output.wait_played()
         except asyncio.CancelledError:
+            if story_plan is not None and output is not None and not output.finished:
+                story.interrupt(output.text)
+            timing.mark("cancelled")
             raise  # 打断方已处理 busy，不在这里复位
         except Exception as e:
             print(f"[P5] process_turn error: {type(e).__name__}: {e}", flush=True)
+            if seq == my_turn:
+                await ws.send_json({"type": "response_error", "stage": "asr", "message": "语音识别暂时不可用，请稍后再试。"})
         finally:
             if seq == my_turn:  # 本轮未被取代/打断 → 复位
                 busy = False
                 idle_ms = 0
 
-    async def detect_wake(speech_bytes: bytes):
+    async def detect_wake(speech_bytes: bytes, timing):
         """IDLE：KWS 检测唤醒词。命中即唤醒；若同句还说了内容，直接当第一轮处理。"""
         nonlocal state, busy, idle_ms, reference_embedding, seq
         seq += 1
@@ -287,6 +345,7 @@ async def ws_endpoint(ws: WebSocket):
                 return
             wav = pcm_to_wav(speech_bytes)
             kw = await kws_detect(wav)
+            timing.mark("kws_done")
             if not kw.get("detected"):
                 return  # 非唤醒词，继续待机
             state = "ACTIVE"
@@ -300,13 +359,15 @@ async def ws_endpoint(ws: WebSocket):
                 except Exception as e:
                     print(f"[声纹] 提取失败: {e}", flush=True)
             # 同一句里是否还说了别的内容（例："小云小云，给我讲个故事吧"）
+            timing.mark("speaker_done")
             content = strip_wake_word(await asr_text(wav))
+            timing.mark("asr_done")
             if content:
                 # 唤醒句里已经带了问题 → 直接回答，不要先说「我在呢」（中间空档会让孩子以为没听到而重复）
                 print(f"[唤醒] 同句含内容: {content!r} → 直接回答", flush=True)
-                await process_turn(speech_bytes, text_override=content)
+                await process_turn(speech_bytes, text_override=content, timing=timing)
             else:
-                await play_reply_and_wait("在的，你说～", my_turn)
+                await play_reply_and_wait("在的，你说～", my_turn, timing)
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -316,59 +377,81 @@ async def ws_endpoint(ws: WebSocket):
                 busy = False
                 idle_ms = 0
 
-    async def detect_bargein(speech_bytes: bytes):
+    async def detect_bargein(speech_bytes: bytes, timing, expected_seq):
         """BUSY：判停后 KWS 检测，命中「小云小云」打断。"""
-        nonlocal busy, is_speaking, speech, silence_ms, idle_ms, seq, cancelable_task
+        nonlocal busy, is_speaking, speech, silence_ms, idle_ms, seq, cancelable_task, bargein_task
         try:
             if len(speech_bytes) < 3200:
                 return
             kw = await kws_detect(pcm_to_wav(speech_bytes))
+            timing.mark("kws_done")
+            if seq != expected_seq:
+                return
             name = save_debug_wav(speech_bytes, "bargein")
             print(f"[BARGEIN] 音频={len(speech_bytes)/32000:.2f}s kws={kw} 存={name}", flush=True)
             if kw.get("detected"):
                 seq += 1  # 让被取消的旧任务的 finally 不再复位 busy
                 if cancelable_task and not cancelable_task.done():
                     cancelable_task.cancel()
+                    await asyncio.gather(cancelable_task, return_exceptions=True)
                 busy = False
                 is_speaking = False
                 speech = bytearray()
                 silence_ms = 0
+                endpoint.reset()
                 idle_ms = 0
                 print("[KWS] 唤醒词打断", flush=True)
                 await ws.send_json({"type": "user_speaking"})
                 cancelable_task = asyncio.current_task()
                 busy = True
+                if bargein_task is asyncio.current_task():
+                    # 旧流已关闭且播放所有权已接管，后续检测才能安全取消本任务。
+                    bargein_task = None
                 # 打断句里是否还说了内容（例："小云小云，为什么天是蓝的"）→ 直接回答
                 content = strip_wake_word(await asr_text(pcm_to_wav(speech_bytes)))
+                timing.mark("asr_done")
                 if content:
                     print(f"[打断] 同句含内容: {content!r}", flush=True)
-                    await process_turn(speech_bytes, text_override=content)
+                    await process_turn(speech_bytes, text_override=content, timing=timing)
                     return
                 # 只说了唤醒词 → 播一句短回应，再进入聆听
                 seq += 1
-                await play_reply_and_wait("在的，你说～", seq)
+                await play_reply_and_wait("在的，你说～", seq, timing)
+                busy = False
+                idle_ms = 0
             # 非唤醒词：不打断，AI 继续播（busy 保持 True）
         except asyncio.CancelledError:
             raise
         except Exception as e:
             print(f"[KWS] 打断失败: {e}", flush=True)
+            if cancelable_task is asyncio.current_task():
+                busy = False
+                idle_ms = 0
+        finally:
+            if bargein_task is asyncio.current_task():
+                bargein_task = None
 
     def finalize_turn(reason: str):
         """判停：按状态分发（待机唤醒检测 / 播放中打断检测 / 对话）。"""
-        nonlocal is_speaking, speech, silence_ms, busy, cancelable_task, state
+        nonlocal is_speaking, speech, silence_ms, busy, cancelable_task, state, bargein_task
+        timing = TurnTiming(time.monotonic() - silence_ms / 1000)
+        timing.mark("eot", silence_ms=round(silence_ms))
         turn = bytes(speech)
         was_busy = busy
         is_speaking = False
         speech = bytearray()
         silence_ms = 0
-        busy = True
         print(f"[EOT] {reason} 音频={len(turn)/32000:.2f}s", flush=True)
         if state == "IDLE":
-            asyncio.create_task(detect_wake(turn))
+            if not was_busy:
+                busy = True
+                cancelable_task = spawn_task(detect_wake(turn, timing))
         elif was_busy:
-            asyncio.create_task(detect_bargein(turn))
+            if bargein_task is None or bargein_task.done():
+                bargein_task = spawn_task(detect_bargein(turn, timing, seq))
         else:
-            cancelable_task = asyncio.create_task(process_turn(turn))
+            busy = True
+            cancelable_task = spawn_task(process_turn(turn, timing=timing))
 
     try:
         while True:
@@ -381,10 +464,9 @@ async def ws_endpoint(ws: WebSocket):
                 except Exception:
                     continue
                 if d.get("type") == "play_end":
-                    seq += 1
-                    busy = False
-                    idle_ms = 0
-                    print("[播放] 客户端播完，开始计静默", flush=True)
+                    if current_reply and current_reply.acknowledge(d.get("turn_id")):
+                        idle_ms = 0
+                        print("[播放] 当前轮次客户端播完，开始计静默", flush=True)
                 continue
             if "bytes" not in msg:
                 continue
@@ -399,43 +481,44 @@ async def ws_endpoint(ws: WebSocket):
                     play_rms_max = rms
                 if play_rms_n >= 40:  # 约 2 秒
                     avg = play_rms_sum / play_rms_n
-                    print(f"[ECHO] 播放期间麦克风能量 均值={avg:.0f} 峰值={play_rms_max}（阈值{SPEECH_THRESHOLD}）", flush=True)
+                    print(f"[ECHO] 播放期间麦克风能量 均值={avg:.0f} 峰值={play_rms_max}（阈值{endpoint.threshold}）", flush=True)
                     play_rms_sum = 0
                     play_rms_n = 0
                     play_rms_max = 0
 
-            # 所有状态都做 VAD（检测说话 + 判停）
-            if rms > SPEECH_THRESHOLD:
-                if not is_speaking:
+            # 20ms 分帧消除 WebSocket 包长差异；所有状态共享同一判停规则。
+            previous_idle = endpoint.idle_audio_ms
+            for event in endpoint.feed(pcm):
+                if event.kind == 'start':
                     is_speaking = True
                     if state == "ACTIVE" and not busy:
                         await ws.send_json({"type": "user_speaking"})
-                speech.extend(pcm)
-                silence_ms = 0
-                if len(speech) >= MAX_AUDIO_BYTES:
-                    finalize_turn("音频达缓存上限")
-            else:
-                if is_speaking:
-                    speech.extend(pcm)
-                    silence_ms += len(pcm) / 32000 * 1000
-                    if silence_ms >= EOT_MS or len(speech) >= MAX_AUDIO_BYTES:
-                        finalize_turn(f"静音判停 静音={silence_ms:.0f}ms")
                 else:
-                    # 静默（仅 ACTIVE 且不在播放 → 计时回待机）
-                    if state == "ACTIVE" and not busy:
-                        idle_ms += len(pcm) / 32000 * 1000
-                        if idle_ms >= IDLE_TIMEOUT_MS:
-                            state = "IDLE"
-                            reference_embedding = None  # 本轮结束，释放声纹
-                            idle_ms = 0
-                            print("[IDLE] 静默超时，回待机（本轮声纹已释放）", flush=True)
-                            await ws.send_json({"type": "idle"})
-                            asyncio.create_task(summarize_session())  # 本轮会话结束 → 更新长期记忆
+                    speech = bytearray(event.pcm)
+                    silence_ms = event.silence_ms
+                    finalize_turn(f"{event.reason} 静音={silence_ms}ms 门限={event.threshold}")
+            if not endpoint.speaking:
+                # 静默（仅 ACTIVE 且不在播放 → 计时回待机）
+                if state == "ACTIVE" and not busy:
+                    idle_ms += endpoint.idle_audio_ms - previous_idle
+                    if idle_ms >= IDLE_TIMEOUT_MS:
+                        state = "IDLE"
+                        reference_embedding = None  # 本轮结束，释放声纹
+                        idle_ms = 0
+                        print("[IDLE] 静默超时，回待机（本轮声纹已释放）", flush=True)
+                        await ws.send_json({"type": "idle"})
+                        asyncio.create_task(summarize_session())  # 本轮会话结束 → 更新长期记忆
     except WebSocketDisconnect:
         pass
     except Exception as e:
         print(f"[WS] 主循环异常: {e}", flush=True)
     finally:
+        seq += 1
+        pending = list(connection_tasks)
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
         asyncio.create_task(summarize_session())  # 连接断开 → 更新长期记忆
 
 

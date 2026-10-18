@@ -5,6 +5,8 @@ import wave
 
 import websockets
 
+from ws_helpers import acknowledge_playback, track_event
+
 AUDIO = "../audio-test"
 
 
@@ -13,7 +15,7 @@ async def recv_json(ws, timeout=40):
         raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
         if isinstance(raw, (bytes, bytearray)):
             continue
-        return json.loads(raw)
+        return track_event(ws, json.loads(raw))
 
 
 async def send_wav(ws, path):
@@ -28,8 +30,7 @@ async def send_wav(ws, path):
 
 
 async def play_end(ws):
-    await ws.send(json.dumps({"type": "play_end"}))
-    await asyncio.sleep(0.2)
+    await acknowledge_playback(ws, recv_json)
 
 
 async def main():

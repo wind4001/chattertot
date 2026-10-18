@@ -89,6 +89,30 @@ it runs three models, and **4 GB OOMs**.
 
 ---
 
+## Interactive stories
+
+Say “小云小云，我们一起编故事” to choose a character and setting, then build the story
+together one short segment at a time. Change the plot in your own words, ask for an ending,
+or say “不玩故事了” to return to chat. During playback, say the wake word before interrupting.
+Story context stays in the current connection (last 40 messages), is not stored as real
+profile memory, and resets when the connection ends.
+
+## Windows one-click startup
+
+Double-click [启动.cmd](启动.cmd) to prepare dependencies and models, start services and open
+the page. Fill in API credentials when prompted. Use [自检.cmd](自检.cmd) for read-only
+diagnostics; it does not call paid cloud APIs. Existing data is retained.
+
+```powershell
+.\start.ps1 -NoBrowser
+.\start.ps1 -Action Doctor
+.\start.ps1 -TestMode -NoBrowser
+```
+
+Endpointing uses 20ms frames, 80ms onset confirmation, 300ms pre-roll, an adaptive quiet
+background energy threshold, and 1400ms trailing quiet. TV speech and sudden sustained loud
+noise remain limitations. Segments are bounded at 20 seconds.
+
 ## Quick start
 
 **Prerequisites**: Docker, Python 3.11+, a Chromium-based browser, and credentials for whichever

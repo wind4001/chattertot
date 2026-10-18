@@ -1,4 +1,5 @@
 """LLM 客户端：调 deepseek-v4-flash（OpenAI 兼容接口）生成回复。"""
+import json
 import os
 
 import httpx
@@ -55,6 +56,49 @@ async def chat(user_text: str, history: list | None = None, facts: str = ""):
         return None
 
 
+async def chat_stream(user_text: str, history: list | None = None, facts: str = "", *, instruction: str = ""):
+    """逐段返回正文；错误向上传递，让调用方区分失败与正常结束。"""
+    if not LLM_API_KEY:
+        raise RuntimeError("LLM_API_KEY 未配置")
+    system = SYSTEM_PROMPT
+    if instruction:
+        system += '\n\n' + instruction
+    if facts:
+        system += f"\n\n【关于这个小朋友，你记得这些】\n{facts}"
+    messages = [{"role": "system", "content": system}, *(history or [])]
+    messages.append({"role": "user", "content": user_text})
+    received = False
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=5.0, read=20.0, write=20.0, pool=5.0),
+        trust_env=False,
+    ) as client:
+        async with client.stream(
+            "POST", f"{LLM_BASE_URL.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+            json={"model": LLM_MODEL, "messages": messages, "stream": True, "max_tokens": 500},
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    if not received:
+                        raise RuntimeError("LLM 返回空回复")
+                    return
+                if not payload:
+                    continue
+                data = json.loads(payload)
+                if data.get("error"):
+                    raise RuntimeError("LLM 流返回错误")
+                for choice in data.get("choices", []):
+                    content = choice.get("delta", {}).get("content")
+                    if content:
+                        received = True
+                        yield content
+    raise RuntimeError("LLM 流未正常结束")
+
+
 MEMORY_PROMPT = (
     "你是记忆整理助手。下面是一个小朋友和 AI 伙伴「小云」的对话片段，以及已有的记忆档案。\n"
     "请输出更新后的记忆档案，只记录值得长期记住的信息：\n"
@@ -63,7 +107,8 @@ MEMORY_PROMPT = (
     "- 家庭成员、宠物\n"
     "- 重要事件\n"
     "- 已经讲过的故事标题（避免以后重复讲同一个）\n"
-    "规则：忽略寒暄和一次性内容；已有档案中的信息有变化就更新；合并去重；"
+    "规则：忽略寒暄和一次性内容；故事、角色扮演中的虚构身份和经历不得记为小朋友真实信息；"
+    "已有档案中的信息有变化就更新；合并去重；"
     "总长不超过 300 字；直接输出档案内容，不要标题、不要任何解释。"
 )
 

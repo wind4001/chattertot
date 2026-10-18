@@ -3,17 +3,27 @@ const $ = (id) => document.getElementById(id);
 
 // 24kHz PCM 流式播放器（时间线无缝调度，块与块精确衔接）——类定义必须在实例化之前
 class PcmPlayer {
-  constructor() {
+  constructor(onEnd) {
     this.ctx = null; // 延迟到首次 push 时创建（用户手势后）
     this.nextTime = 0;
     this.sources = [];
-    this.endTimer = null;
+    this.turnId = null;
+    this.inputFinished = false;
+    this.endSent = false;
+    this.onEnd = onEnd;
   }
   _ensureCtx() {
     if (!this.ctx) this.ctx = new AudioContext({ sampleRate: 24000 });
     return this.ctx;
   }
-  push(int16) {
+  begin(turnId) {
+    this.stop();
+    this.turnId = turnId;
+    this.inputFinished = false;
+    this.endSent = false;
+  }
+  push(int16, turnId) {
+    if (turnId !== this.turnId || this.inputFinished || !int16.length) return;
     const ctx = this._ensureCtx();
     if (ctx.state === "suspended") ctx.resume();
     const float32 = new Float32Array(int16.length);
@@ -25,33 +35,37 @@ class PcmPlayer {
     src.connect(ctx.destination);
     const now = ctx.currentTime;
     if (this.nextTime < now) this.nextTime = now;
-    src.start(this.nextTime); // 在时间线上精确衔接，无间隙
-    this.nextTime += float32.length / 24000;
     this.sources.push(src);
     src.onended = () => {
+      if (turnId !== this.turnId) return;
       const i = this.sources.indexOf(src);
       if (i >= 0) this.sources.splice(i, 1);
+      this._maybeEnd();
     };
-    this._scheduleEnd();
+    src.start(this.nextTime); // 在时间线上精确衔接，无间隙
+    this.nextTime += float32.length / 24000;
   }
-  _scheduleEnd() {
-    // 队列播完时通知服务端（服务端以此开始计静默，而不是按"发送完成"计）
-    clearTimeout(this.endTimer);
-    const remainMs = Math.max(0, (this.nextTime - this.ctx.currentTime) * 1000);
-    this.endTimer = setTimeout(() => {
-      if (this.sources.length === 0 && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "play_end" }));
-      }
-    }, remainMs + 200);
+  finish(turnId) {
+    if (turnId !== this.turnId) return;
+    this.inputFinished = true;
+    this._maybeEnd();
+  }
+  _maybeEnd() {
+    if (this.turnId !== null && this.inputFinished && !this.sources.length && !this.endSent) {
+      this.endSent = true;
+      this.onEnd(this.turnId);
+    }
   }
   stop() {
-    clearTimeout(this.endTimer);
-    for (const src of this.sources) {
+    this.turnId = null;
+    this.inputFinished = false;
+    const sources = this.sources;
+    this.sources = [];
+    for (const src of sources) {
       try {
         src.stop();
       } catch (e) {}
     }
-    this.sources = [];
     this.nextTime = 0;
   }
 }
@@ -62,49 +76,104 @@ let micNode = null;
 let micStream = null;
 let chunkBuffer = new Int16Array(0);
 const CHUNK = 800; // 50ms @ 16kHz
-const player = new PcmPlayer();
+let currentTurnId = null;
+let latestTurnId = 0;
+let aiLine = null;
+let aiText = "";
+const player = new PcmPlayer((turnId) => {
+  if (turnId === currentTurnId && ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "play_end", turn_id: turnId }));
+    $("status").textContent = "听你说…";
+  }
+});
 
 $("btnStart").onclick = start;
 $("btnStop").onclick = stop;
 
 async function start() {
+  $("storyMode").textContent = "";
   $("btnStart").disabled = true;
   $("btnStop").disabled = false;
   $("status").textContent = "连接中...";
 
-  ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.binaryType = "arraybuffer";
-  ws.onopen = () => {
+  latestTurnId = 0;
+  currentTurnId = null;
+  const socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws = socket;
+  socket.binaryType = "arraybuffer";
+  socket.onopen = () => {
+    if (socket !== ws) return;
     $("status").textContent = "已连接，开始说话吧";
     startMic();
   };
-  ws.onclose = () => {
+  socket.onclose = () => {
+    if (socket !== ws) return;
+    stop();
     $("status").textContent = "已断开";
   };
-  ws.onmessage = (ev) => {
+  socket.onmessage = (ev) => {
+    if (socket !== ws) return;
     if (typeof ev.data === "string") handleJson(JSON.parse(ev.data));
   };
 }
 
 function handleJson(msg) {
+  if (msg.type === "turn_start") {
+    if (!Number.isInteger(msg.turn_id) || msg.turn_id <= latestTurnId) return;
+    currentTurnId = latestTurnId = msg.turn_id;
+    player.begin(msg.turn_id);
+    aiText = "";
+    aiLine = log("小云: ", "ai");
+    $("status").textContent = "小云正在想…";
+    return;
+  }
+  if (msg.turn_id !== undefined && msg.turn_id !== currentTurnId) return;
   switch (msg.type) {
+    case "story_mode":
+      $("storyMode").textContent = {
+        role: "一起编故事 · 选一个角色",
+        scene: "一起编故事 · 选一个场景",
+        playing: "故事进行中 · 可以改剧情，也可以说「不玩故事了」",
+        off: "故事已结束，可以继续聊天",
+      }[msg.phase] || "";
+      break;
     case "asr_text":
       log("你: " + msg.text, "asr");
       break;
+    case "ai_text_delta":
+      if (!aiLine || currentTurnId === null) break;
+      aiText += msg.text;
+      aiLine.textContent = "小云: " + aiText;
+      $("log").scrollTop = $("log").scrollHeight;
+      break;
     case "ai_text":
-      log("小云: " + msg.text, "ai");
+      if (aiLine) aiLine.textContent = "小云: " + msg.text;
       break;
     case "ai_audio":
       // 流式 PCM：base64 -> Int16 -> 送入播放器（边收边播）
-      player.push(base64ToInt16(msg.audio));
+      if (currentTurnId === null) break;
+      player.push(base64ToInt16(msg.audio), msg.turn_id);
+      $("status").textContent = "小云正在说…";
+      break;
+    case "audio_end":
+      player.finish(msg.turn_id);
+      break;
+    case "response_error":
+      log(msg.message, "sys");
+      $("status").textContent = msg.message;
       break;
     case "user_speaking":
       player.stop(); // 用户插话，停掉正在播的声音
+      currentTurnId = null;
+      $("status").textContent = "听你说…";
       break;
     case "wake":
       log("我在呢！", "sys");
       break;
     case "idle":
+      player.stop();
+      currentTurnId = null;
+      $("status").textContent = "待机中";
       log("（待机中）说「小云小云」唤醒我", "sys");
       break;
   }
@@ -152,20 +221,25 @@ async function startMic() {
     };
     src.connect(micNode);
   } catch (e) {
+    stop();
     log("麦克风开启失败: " + e.message, "sys");
+    $("status").textContent = "麦克风未开启，请检查权限后重试";
   }
 }
 
 function stop() {
+  $("storyMode").textContent = "";
   player.stop();
+  currentTurnId = null;
   if (micNode) micNode.disconnect();
   if (micStream) micStream.getTracks().forEach((t) => t.stop());
   if (micCtx) micCtx.close();
-  if (ws) ws.close();
+  const socket = ws;
+  ws = null;
+  if (socket) socket.close();
   micNode = null;
   micStream = null;
   micCtx = null;
-  ws = null;
   $("btnStart").disabled = false;
   $("btnStop").disabled = true;
   $("status").textContent = "已停止";
@@ -177,4 +251,5 @@ function log(text, cls) {
   div.textContent = text;
   $("log").appendChild(div);
   $("log").scrollTop = $("log").scrollHeight;
+  return div;
 }
