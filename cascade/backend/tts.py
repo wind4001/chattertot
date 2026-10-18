@@ -82,7 +82,10 @@ async def synthesize_stream(text: str, sample_rate: int = 24000):
             },
         },
     }
-    async with httpx.AsyncClient(timeout=120, trust_env=False) as client:
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=5.0, read=15.0, write=20.0, pool=5.0),
+        trust_env=False,
+    ) as client:
         async with client.stream("POST", TTS_URL, headers=headers, json=body) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():

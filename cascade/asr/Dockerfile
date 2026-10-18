@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 国内网络慢的话，取消下面注释启用清华 pip 镜像
 # ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 先装 CPU 版 torch（体积小、快），再装 funasr + web 依赖
-RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+# 固定配套 CPU 版本，避免重建时漂移到不兼容的音频加载接口。
+RUN pip install --no-cache-dir torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir funasr fastapi uvicorn python-multipart
 
 COPY speaker_api.py /app/speaker_api.py

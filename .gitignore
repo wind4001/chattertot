@@ -11,6 +11,8 @@ __pycache__/
 # 工具工作目录（生成物，不进 git；成图另存到 docs/）
 .archify/
 .playwright-mcp/
+.planning/
+.runtime/
 
 # 模型文件（大，不进 git）
 cascade/models/

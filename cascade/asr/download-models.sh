@@ -29,29 +29,23 @@ IMAGE="${ASR_IMAGE:-cascade-asr:latest}"
 VOLUME="${ASR_VOLUME:-cascade_asr_models}"
 COMPOSE_FILE="../docker-compose.yml"
 
-MODELS=(
-  "iic/SenseVoiceSmall"
-  "iic/speech_sanm_kws_phone-xiaoyun-commands-online"
-  "iic/speech_campplus_sv_zh-cn_16k-common"
-)
-
 # 镜像不存在则先构建（下载要在镜像里跑，因为要用它自带的 modelscope）
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "镜像 $IMAGE 不存在，先构建……"
   docker compose -f "$COMPOSE_FILE" build asr
 fi
 
-echo "目标卷：$VOLUME"
-echo "待下载：${#MODELS[@]} 个模型"
-echo
+SCRIPT_PATH="$(pwd)/prepare_models.py"
+if command -v cygpath >/dev/null 2>&1; then
+  SCRIPT_PATH="$(cygpath -m "$SCRIPT_PATH")"
+fi
 
+echo "目标卷：$VOLUME"
 docker run --rm \
   -v "${VOLUME}:/models" \
+  -v "${SCRIPT_PATH}:/setup/prepare_models.py:ro" \
   -e MODELSCOPE_CACHE=/models \
-  "$IMAGE" \
-  python -c '
-import sys
-from modelscope import snapshot_download
+  "$IMAGE" python /setup/prepare_models.py
 
 EXPECTED_PREFIX = "/models/models/"
 EXPECTED_SUFFIX = "/snapshots/master"

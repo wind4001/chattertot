@@ -1,4 +1,6 @@
-"""状态机回归测试：覆盖 IDLE/ACTIVE/BUSY 三态与唤醒、声纹、打断、忽略逻辑。
+"""协议冒烟使用合成音频，不作为儿童唤醒率或声纹准确率验收。
+
+状态机回归测试：覆盖 IDLE/ACTIVE/BUSY 三态与唤醒、声纹、打断、忽略逻辑。
 
 需先启动测试服务（8081，chattertot_test 库）：
   cd cascade/backend
@@ -17,6 +19,8 @@ import sys
 import wave
 
 import websockets
+
+from ws_helpers import acknowledge_playback, track_event
 
 WS_URL = "ws://localhost:8081/ws"
 AUDIO = "../audio-test"
@@ -60,7 +64,10 @@ async def recv_json(ws, timeout=40):
         raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
         if isinstance(raw, (bytes, bytearray)):
             continue
-        return json.loads(raw)
+        event = track_event(ws, json.loads(raw))
+        if event["type"] == "ai_text_delta":
+            continue
+        return event
 
 
 async def send_wav(ws, path, tail_ms=1500):
@@ -77,19 +84,22 @@ async def send_wav(ws, path, tail_ms=1500):
 
 
 async def play_end(ws):
-    await ws.send(json.dumps({"type": "play_end"}))
-    await asyncio.sleep(0.2)
+    await acknowledge_playback(ws, recv_json)
 
 
 async def collect(ws, until_types, max_events=60, timeout=30):
     """收集事件直到出现 until_types 之一（或超时）。返回收到的事件类型列表。"""
     seen = []
     try:
-        for _ in range(max_events):
-            d = await recv_json(ws, timeout=timeout)
-            seen.append(d)
-            if d["type"] in until_types:
-                break
+        async with asyncio.timeout(timeout):
+            while len(seen) < max_events:
+                d = await recv_json(ws, timeout=timeout)
+                # 按句流式会产生更多音频块；块数不能当作回复结束条件。
+                if d["type"] == "ai_audio" and "ai_audio" not in until_types:
+                    continue
+                seen.append(d)
+                if d["type"] in until_types:
+                    break
     except asyncio.TimeoutError:
         pass
     return seen
